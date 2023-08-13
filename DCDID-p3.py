@@ -22,6 +22,7 @@ from sklearn import metrics
 import math
 import matplotlib.pyplot as plt  # 画图用
 import numpy as np
+from cdlib import evaluation
 # from some_module import convert_graph_formats
 
 
@@ -118,6 +119,7 @@ def CDID(Gsub,maxlabel):#G_sub is the subgraph for the potentially changing comm
     # communities' labels.
     
     #initial information
+    starttime=datetime.datetime.now()
     Neigb = {}
     info = 0
     # Average Degree、Maximum Degree   
@@ -186,7 +188,6 @@ def CDID(Gsub,maxlabel):#G_sub is the subgraph for the potentially changing comm
         # print(v)
         # print(list(listv))
         num_v = len(list(listv))
-        print(num_v)
         sum_deg += deg[v]
       
         for u in listv:
@@ -263,14 +264,14 @@ def CDID(Gsub,maxlabel):#G_sub is the subgraph for the potentially changing comm
             # print(v,u,Iin,Iv,Iu,tempu[0],pu,tempu[1],fuv)
             info += list_I[v]
         # if v==3:
-        #                print(v,Iv)
+        
 
-        #print(list_I)
+        
         if Imax < 0.0001:
             break
 
 
-    endtime = datetime.datetime.now()
+    
 #    print ('time:', (endtime - starttime).seconds)    
 # community partition**************************************************************
 
@@ -303,10 +304,8 @@ def CDID(Gsub,maxlabel):#G_sub is the subgraph for the potentially changing comm
     order_value = [community[k] for k in sorted(community.keys())]
     commu_num = len(set(order_value))  # 社团数量
     endtime1 = datetime.datetime.now()
-    print('community partitioning is complete')
-    print(list_I)
-    #print('community number:', commu_num)
-    print('alltime:', (endtime1 - starttime).seconds)
+    endtime = datetime.datetime.now()
+    print('Running Time:', (endtime1 - starttime).seconds)
     return community  #It was returning only nodes whith community nodes like 1:1,2:2....
     #return list_I
 
@@ -366,6 +365,8 @@ def drawcommunity(g,partition,filepath):#Function to draw nodes with different c
 # Modularity
 
 def getQ(Gsub,C,maxl):#Grah,communities, (maximum number of nodes)
+    maxl=max(Gsub.nodes())
+
     amat = []  # adjacency matrix
     #rows, cols = (len(Gsub.nodes()), len(Gsub.nodes()))
     rows, cols=(maxl,maxl)
@@ -393,9 +394,6 @@ def getQ(Gsub,C,maxl):#Grah,communities, (maximum number of nodes)
         for a in ci:
             for b in ci:
                 if int(a) != int(b):
-                    # print("a,b",a,b)
-                    # cmat[a - 1][b - 1] = 1
-                    # cmat[b - 1][a - 1] = 1
                     cmat[a-1][b-1] = 1
                     cmat[b-1][a-1] = 1
     Q=0#Modularity
@@ -405,9 +403,6 @@ def getQ(Gsub,C,maxl):#Grah,communities, (maximum number of nodes)
     E = len(Gsub.edges())#(number of edges)
     for i in Gsub.nodes():
         for j in Gsub.nodes():
-            #print("**",i,j)
-            # sum = sum + (amat[i-1][j-1] -(du[i]*du[j])/(2*m))*cmat[i-1][j-1]
-            # sum_m = sum_m + ((du[i]*du[j])/(2*m))*cmat[i-1][j-1]
             sum = sum + (amat[i-1][j-1] -(du[i]*du[j])/(2*E))*cmat[i-1][j-1]
             sum_m = sum_m + ((du[i]*du[j])/(2*E))*cmat[i-1][j-1]
 
@@ -466,7 +461,7 @@ def conductance(graph: nx.Graph, community: object, summary: bool = True) -> obj
         return {
         "min": min(values),
         "max": max(values),
-        "score": np.mean(values),
+        "mean": np.mean(values),
         "std": np.std(values)
         }
     
@@ -500,7 +495,8 @@ def external_density(Gsub,C):
 # Coverage
 
 def coverage(Gsub,C):
-    cmate = [[0] * len(Gsub.nodes()) for _ in range(len(Gsub.nodes()))]
+    maxl=max(Gsub.nodes())
+    cmate = [[0] * maxl for _ in range(maxl)]
     for ci in C:
         for a in ci:
             for b in ci:
@@ -565,10 +561,91 @@ def cut_ratio(graph: nx.Graph, community: object, summary: bool = True) -> objec
         return {
         "min": min(values),
         "max": max(values),
-        "score": np.mean(values),
+        "mean": np.mean(values),
         "std": np.std(values)
         }
     return values
+
+# AVI Average isolability
+
+def Isolability(G, Ci):
+    sum1 = 0
+    sum2 = 0
+    if len(Ci)!=0:
+
+        for i in Ci:
+            for j in Ci:
+                if (i, j) in G.edges():
+                    sum1 += 1
+
+        for i in Ci:
+            for j in G:
+                if j not in Ci:
+                    if (i, j) in G.edges():
+                        sum2 += 1
+
+        #print("\n\n",Ci,"------Isolability----",sum1/2,sum2,(sum1 /2)/ (sum1/2 + sum2))
+        return (sum1 / 2) / (sum1 / 2 + sum2)
+def AVI (G,C):
+    sum=0
+    for ci in C:
+        sum=sum+Isolability(G,ci)
+    avg=sum/len(C)
+    print("Average Isolability",avg)
+    return avg
+
+
+# Purity
+
+def purity(communities: object) :
+    """Purity is the product of the frequencies of the most frequent labels carried by the nodes within the communities
+
+    :param communities: AttrNodeClustering object
+    :return: FitnessResult object
+
+    Example:
+
+    >>> from cdlib.algorithms import eva
+    >>> from cdlib import evaluation
+    >>> import random
+    >>> l1 = ['A', 'B', 'C', 'D']
+    >>> l2 = ["E", "F", "G"]
+    >>> g = nx.barabasi_albert_graph(100, 5)
+    >>> labels=dict()
+    >>> for node in g.nodes():
+    >>>    labels[node]={"l1":random.choice(l1), "l2":random.choice(l2)}
+    >>> communities = eva(g_attr, labels, alpha=0.5)
+    >>> pur = evaluation.purity(communities)
+
+    :References:
+
+    1. Citraro, Salvatore, and Giulio Rossetti. "Eva: Attribute-Aware Network Segmentation." International Conference on Complex Networks and Their Applications. Springer, Cham, 2019.
+    """
+
+    pur = evaluation.purity(communities.coms_labels)
+    return pur
+
+
+
+###All MAtrix calculation
+def calculateMatrix(G,comm_va,comm_list,i):
+    #Matrix calculation
+    print("For Timestamp ",i)
+    print("No of communities are :")
+    print(len(comm_va))
+    getQ(G,comm_va,G.number_of_nodes())
+    Conductance_values=conductance(G,comm_va,True)
+    print("Conductance value is ")
+    print(Conductance_values['std'])
+    external_density(G,comm_va)
+    getscore(comm_va,comm_list)
+    coverage(G,comm_va)
+    Cut_ratio_value=cut_ratio(G,comm_va,True)
+    print("Cut Ratio value is ")
+    print(Cut_ratio_value['std'])
+    AVI(G,comm_va)
+
+
 
 ############################################################
 #----------main-----------------
@@ -611,112 +688,105 @@ initcomm=conver_comm_to_lab(comm)
 print("initcomm is ")
 print(initcomm)
 comm_va=list(initcomm.values())
-print(comm_va)
+# print(comm_va)
 
 #Matrix calculation
-getQ(G,comm_va,G.number_of_nodes())
-Conductance_values=conductance(G,comm_va,True)
-print(Conductance_values)
-external_density(G,comm_va)
-getscore(comm_va,comm_list)
-coverage(G,comm_va)
-Cut_ratio_value=cut_ratio(G,comm_va,True)
-print(Cut_ratio_value)
+calculateMatrix(G,comm_va,comm_list,0)
 
-# start=time.time()
-# G1=nx.Graph()
-# G2=nx.Graph()
-# G1=G
-# #filename='switch.t0'
-# filename='15node_'
-# for i in range(2,5):
-#     print('begin loop:', i-1)
-#     comm_new_file=open(path+filename+'comm_t0'+str(i)+'.txt','r')
-#     if i<10:#Reading the community file and checking if less than 10 or not
-#         edge_list_new_file=open(path+filename+'t0'+str(i)+'.txt','r')
-#         edge_list_new=edge_list_new_file.readlines()
-#         comm_new=comm_new_file.readlines()
-#     elif i==10:
-#         edge_list_new_file=open(path+'switch.t10.edges','r')
-#         edge_list_new=edge_list_new_file.readlines()
-#         comm_new=comm_new_file.readlines()
-#     else:
-#         edge_list_new_file=open(path+'switch.t'+str(i)+'.edges','r')
-#         edge_list_new=edge_list_new_file.readlines()
-#         comm_new=comm_new_file.readlines()
-#     comm_new=str_to_int(comm_new)
-#     for line in edge_list_new:
-#          temp = line.strip().split()     
-#          G2.add_edge(int(temp[0]),int(temp[1]))
-#     print('Network G' + str(i - 1) + ' for Time T' + str(i - 1) +'*********************************************')
-#     nx.draw_networkx(G2)
-#     fpath='./data/pic/G_'+str(i-1)+'.png'
-#     plt.savefig(fpath)           #Output method 1: Save the image as a png file
-#     plt.show()
-#     #The total number of nodes in the current time slice and the previous time slice are related to each other.
-#     total_nodes =set(G1.nodes())| set(G2.nodes())    
+start=time.time()
+G1=nx.Graph()
+G2=nx.Graph()
+G1=G
+#filename='switch.t0'
+filename='15node_'
+for i in range(2,5):
+    print('begin loop:', i-1)
+    comm_new_file=open(path+filename+'comm_t0'+str(i)+'.txt','r')
+    if i<10:#Reading the community file and checking if less than 10 or not
+        edge_list_new_file=open(path+filename+'t0'+str(i)+'.txt','r')
+        edge_list_new=edge_list_new_file.readlines()
+        comm_new=comm_new_file.readlines()
+    elif i==10:
+        edge_list_new_file=open(path+'switch.t10.edges','r')
+        edge_list_new=edge_list_new_file.readlines()
+        comm_new=comm_new_file.readlines()
+    else:
+        edge_list_new_file=open(path+'switch.t'+str(i)+'.edges','r')
+        edge_list_new=edge_list_new_file.readlines()
+        comm_new=comm_new_file.readlines()
+    comm_new=str_to_int(comm_new)
+    for line in edge_list_new:
+         temp = line.strip().split()     
+         G2.add_edge(int(temp[0]),int(temp[1]))
+    print('Network G' + str(i - 1) + ' for Time T' + str(i - 1) +'*********************************************')
+    nx.draw_networkx(G2)
+    fpath='./data/pic/G_'+str(i-1)+'.png'
+    plt.savefig(fpath)           #Output method 1: Save the image as a png file
+    plt.show()
+    #The total number of nodes in the current time slice and the previous time slice are related to each other.
+    total_nodes =set(G1.nodes())| set(G2.nodes())    
     
-#     #Checking which node and edges are added and removded in new greaph
-#     nodes_added=set(G2.nodes())-set(G1.nodes())
-#     # print ('Nodes added:',nodes_added)
-#     nodes_removed=set(G1.nodes())-set(G2.nodes())
-#     # print ('Nodes removed:',nodes_removed)
-#     edges_added = set(G2.edges())-set(G1.edges())
-#     # print ('Edges added:',edges_added)
-#     edges_removed = set(G1.edges())-set(G2.edges())
-#     # print ('Edges removed:',edges_removed)
-#     all_change_comm=set()
-#     #Node Addition Handling#############################################################
-#     #addn_ch_comm=Communities which can change,addn_pro_edges=edges connected to new node,addn_commu=updated community
-#     addn_ch_comm,addn_pro_edges,addn_commu = node_addition(G2,nodes_added,comm)
-#     edges_added=edges_added-addn_pro_edges#Remove processed edges
-#     #    print edges_added
-#     all_change_comm=all_change_comm | addn_ch_comm
-#     #    print('addn_ch_comm',addn_ch_comm)
+    #Checking which node and edges are added and removded in new greaph
+    nodes_added=set(G2.nodes())-set(G1.nodes())
+    # print ('Nodes added:',nodes_added)
+    nodes_removed=set(G1.nodes())-set(G2.nodes())
+    # print ('Nodes removed:',nodes_removed)
+    edges_added = set(G2.edges())-set(G1.edges())
+    # print ('Edges added:',edges_added)
+    edges_removed = set(G1.edges())-set(G2.edges())
+    # print ('Edges removed:',edges_removed)
+    all_change_comm=set()
+    #Node Addition Handling#############################################################
+    #addn_ch_comm=Communities which can change,addn_pro_edges=edges connected to new node,addn_commu=updated community
+    addn_ch_comm,addn_pro_edges,addn_commu = node_addition(G2,nodes_added,comm)
+    edges_added=edges_added-addn_pro_edges#Remove processed edges
+    #    print edges_added
+    all_change_comm=all_change_comm | addn_ch_comm
+    #    print('addn_ch_comm',addn_ch_comm)
    
-#     #Node Deletion Handling#############################################################
-#     deln_ch_comm,deln_pro_edges,deln_commu  = node_deletion(G1,nodes_removed,addn_commu)
-#     all_change_comm=all_change_comm | deln_ch_comm
-#     edges_removed=edges_removed-deln_pro_edges
-#     adde_ch_comm= edge_addition(edges_added,deln_commu)
-#     all_change_comm=all_change_comm | adde_ch_comm
-#     #Edge Deletion Handling#############################################################
-#     dele_ch_comm= edge_deletion(edges_removed,deln_commu)
-#     all_change_comm=all_change_comm | dele_ch_comm
-#     unchangecomm=()#Unchanged Community Labels
-#     newcomm={}#The format "{node: community}"
-#     newcomm=deln_commu# Edge addition and deletion are only processed on existing nodes,
-#     # and no new nodes or deleted nodes (already processed) are added
-#     unchangecomm=set(newcomm.values())-all_change_comm
-#     unchcommunity={ key:value for key,value in newcomm.items() if value in unchangecomm}#Invariant communities: labels and nodes
-#     #Identify the subgraph corresponding to the changing communities, then apply information dynamics to the subgraph to discover the new
-#     #  community structure. Combine the unchanged community structure with the newly discovered structure to obtain the updated community structure.
-#     Gtemp=nx.Graph()
-#     Gtemp=getchangegraph(all_change_comm,newcomm,G2)
-#     unchagecom_maxlabe=0    
-#     if len(unchangecomm)>0:
-#         unchagecom_maxlabe=max(unchangecomm)
-#     if Gtemp.number_of_edges()<1:#Communities remain unchanged
-#         comm=newcomm
-#     else:           
-#         getnewcomm=CDID(Gtemp,unchagecom_maxlabe)
-#         print('T'+str(i-1)+'Temporal networkdelta_g'+str(i-1)+'*********************************************')
-#         nx.draw_networkx(Gtemp)
-#         fpath='./data/pic/delta_g'+str(i-1)+'.png'
-#         plt.savefig(fpath)  
-#         plt.show()
+    #Node Deletion Handling#############################################################
+    deln_ch_comm,deln_pro_edges,deln_commu  = node_deletion(G1,nodes_removed,addn_commu)
+    all_change_comm=all_change_comm | deln_ch_comm
+    edges_removed=edges_removed-deln_pro_edges
+    adde_ch_comm= edge_addition(edges_added,deln_commu)
+    all_change_comm=all_change_comm | adde_ch_comm
+    #Edge Deletion Handling#############################################################
+    dele_ch_comm= edge_deletion(edges_removed,deln_commu)
+    all_change_comm=all_change_comm | dele_ch_comm
+    unchangecomm=()#Unchanged Community Labels
+    newcomm={}#The format "{node: community}"
+    newcomm=deln_commu# Edge addition and deletion are only processed on existing nodes,
+    # and no new nodes or deleted nodes (already processed) are added
+    unchangecomm=set(newcomm.values())-all_change_comm
+    unchcommunity={ key:value for key,value in newcomm.items() if value in unchangecomm}#Invariant communities: labels and nodes
+    #Identify the subgraph corresponding to the changing communities, then apply information dynamics to the subgraph to discover the new
+    #  community structure. Combine the unchanged community structure with the newly discovered structure to obtain the updated community structure.
+    Gtemp=nx.Graph()
+    Gtemp=getchangegraph(all_change_comm,newcomm,G2)
+    unchagecom_maxlabe=0    
+    if len(unchangecomm)>0:
+        unchagecom_maxlabe=max(unchangecomm)
+    if Gtemp.number_of_edges()<1:#Communities remain unchanged
+        comm=newcomm
+    else:           
+        getnewcomm=CDID(Gtemp,unchagecom_maxlabe)
+        print('T'+str(i-1)+'Temporal networkdelta_g'+str(i-1)+'*********************************************')
+        nx.draw_networkx(Gtemp)
+        fpath='./data/pic/delta_g'+str(i-1)+'.png'
+        plt.savefig(fpath)  
+        plt.show()
         
-#         #Merge community structures, adding unchanged communities with newly obtained communities
-#         d=dict(unchcommunity)        
-#         d.update(getnewcomm)        
-#         comm=dict(d) #Using the currently obtained community structure as the input for the next iteration
-#         print('T'+str(i-1)+'Community Structure of the Time Slice.'+str(i-1)+'*********************************************')
-#         drawcommunity(G2,comm,'./data/pic/community_'+str(i-1)+'.png')
-#     getscore(list(conver_comm_to_lab(comm).values()),comm_new)
-#     print('community number:', len(set(comm.values())))
-#     print(comm)
-#     G1.clear()
-#     G1.add_edges_from(G2.edges())
-#     G2.clear()
+        #Merge community structures, adding unchanged communities with newly obtained communities
+        d=dict(unchcommunity)        
+        d.update(getnewcomm)        
+        comm=dict(d) #Using the currently obtained community structure as the input for the next iteration
+        print('T'+str(i-1)+'Community Structure of the Time Slice.'+str(i-1)+'*********************************************')
+        drawcommunity(G2,comm,'./data/pic/community_'+str(i-1)+'.png')
+    comm_va=list(conver_comm_to_lab(comm).values())
+    calculateMatrix(G2,comm_va,comm_new,i-1)
+    
+    G1.clear()
+    G1.add_edges_from(G2.edges())
+    G2.clear()
 print ('all done')
 
