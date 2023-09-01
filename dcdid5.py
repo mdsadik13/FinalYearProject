@@ -23,7 +23,6 @@ import math
 import matplotlib.pyplot as plt  # 画图用
 import numpy as np
 from cdlib import evaluation
-import openpyxl
 # from some_module import convert_graph_formats
 
 
@@ -35,72 +34,73 @@ def str_to_int(x):#converting the list of string into list os list of integer
 def node_addition(G,addnodes,communitys):	#The input format for the "communitys" parameter is as follows: {node: community_name}.
     change_comm=set()#Stores community labels that may have undergone changes.
     processed_edges=set()#Processed edges that need to be removed from the added edges."
-    
+
     for u in addnodes:
         neighbors_u=G.neighbors(u)
         neig_comm=set()#The community labels of the neighbors.
-        pc=set()  #Stores the edges of newly added     
+        pc=set()
         for v in neighbors_u:
             if v in communitys:
                 neig_comm.add(communitys[v])
                 pc.add((u,v))
-                pc.add((v,u))#In an undirected graph, each edge is represented only once, even though it 
+                pc.add((v,u))#In an undirected graph, each edge is represented only once, even though it
             #connects two nodes bidirectionally. Adding the same edge twice is not necessary for graph operations.
         if len(neig_comm)>1:   #This addition of a node is not within the community.
-           change_comm=change_comm | neig_comm
-           
-           lab=max(communitys.values())+1
-           communitys.setdefault(u,lab)#To assign a community label to vertex u.
-           change_comm.add(lab)
+            change_comm=change_comm | neig_comm
+
+            lab=max(communitys.values())+1
+            communitys.setdefault(u,lab)#To assign a community label to vertex v.
+            change_comm.add(lab)
         else:
             if len(neig_comm)==1:#Indicates that the node is inside a community or is connected only to one community.
-               communitys.setdefault(u,list(neig_comm)[0])#Add the node to the current community
-               processed_edges=processed_edges|pc
+                communitys.setdefault(v,list(neig_comm)[0])#Add the node to the current community
+                processed_edges=processed_edges|pc
             else:
                 #If the newly added node has no connections with other nodes, assign a new community label.
-               communitys.setdefault(u,max(communitys.values())+1)
-    
+                communitys.setdefault(v,max(communitys.values())+1)
+
     #Return the communities that may have changed,
     #  the processed edges, and the latest community structure.
     return change_comm,processed_edges,communitys
 
 def node_deletion(G,delnodes,communitys):					#tested, correct
-    change_comm=set()#Storage structure for potentially changing community labels.
-    processed_edges=set()#Processed edges need to be removed from the added edges.
+    change_comm=set()#存放结构可能发现改变的社区标签
+    processed_edges=set()#已处理过的边，需要从增加边中删除已处理过的边
     for u in delnodes:
         neighbors_u=G.neighbors(u)
-        neig_comm=set()#Community labels of neighboring nodes.        
+        neig_comm=set()#邻居所在社区标签
         for v in neighbors_u:
-            if v in communitys:
+            for v in communitys:
                 neig_comm.add(communitys[v])
                 processed_edges.add((u,v))
                 processed_edges.add((v,u))
-        del communitys[u] #Deletion of nodes and communities.
-        change_comm=change_comm | neig_comm     
-    #Return potentially changing communities, processed edges, and the most recent community structure.  
-    return change_comm,processed_edges,communitys
+        del communitys[u] #删除结点和社区
+        change_comm=change_comm | neig_comm
+    return change_comm,processed_edges,communitys# 返回可能发生变化的社区，处理过的边和最新社区结构。
 
-def edge_addition(addedges,communitys):#If adding edges within the community does not result in any 
-    #changes, no action will be taken; otherwise, mark it.
-    change_comm=set()#Store labels for communities where changes might be detected in the structure.   
-    for item in addedges:        
-        neig_comm=set()#Label of the community where the neighbor belongs.
-        neig_comm.add(communitys[item[0]])#Determine the communities to which the nodes at both ends of an edge belong.
-        neig_comm.add(communitys[item[1]])
-        if len(neig_comm)>1:   #Indicate that this added edge is not within the community.
-           change_comm=change_comm | neig_comm
-    return change_comm # Return the communities where changes are possible.
+def edge_addition(addedges,communitys):#如果加入边在社区内部，不会引起社区变化则不做处理，否则标记
+    change_comm=set()#存放结构可能发现改变的社区标签
+    #    print addedges
+    #    print communitys
+    for item in addedges:
+        neig_comm=set()#邻居所在社区标签
+        if item[0] in communitys:
+            neig_comm.add(communitys[item[0]])#判断一边两端的节点所在社区
+        if item[1] in communitys:
+            neig_comm.add(communitys[item[1]])
+        if len(neig_comm)>1:   #说明此加入边不在社区内部
+            change_comm=change_comm | neig_comm
+    return change_comm # 返回可能发生变化的社区，
 
-def edge_deletion(deledges,communitys):#If removing an edge within a community 
-    #could lead to community changes, it will not change if the edge is outside the community.
-    change_comm=set()#Store labels for communities where structural changes may be detected.   
-    for item in deledges:        
-        neig_comm=set()#Neighbor's community label.
-        neig_comm.add(communitys[item[0]])#Determine the communities to which the nodes at both ends of an edge belong.
+def edge_deletion(deledges,communitys):#如果删除边在社区内部可能引起社区变化，在社区外部则不会变化
+    change_comm=set()#存放结构可能发现改变的社区标签
+    for item in deledges:
+        neig_comm=set()#邻居所在社区标签
+        neig_comm.add(communitys[item[0]])#判断一边两端的节点所在社区
         neig_comm.add(communitys[item[1]])
-        if len(neig_comm)==1:   #Indicate that this added edge is not within the community.
-           change_comm=change_comm | neig_comm	
-    return change_comm # Return the communities where changes may occur.
+        if len(neig_comm)==1:   #说明此加入边不在社区内部
+            change_comm=change_comm | neig_comm
+    return change_comm # 返回可能发生变化的社区
 
 def getchangegraph(all_change_comm,newcomm,Gt):
     Gte=nx.Graph()
@@ -333,11 +333,8 @@ def getscore(comm_va,comm_list):#comm_list is grpund truth community and comm_va
     				actual.append(j)
     				baseline.append(k)
     				break
-    nmi=metrics.normalized_mutual_info_score(actual, baseline)
-    ari= metrics.adjusted_rand_score(actual, baseline)
     print ('nmi', metrics.normalized_mutual_info_score(actual, baseline))
     print ('ari', metrics.adjusted_rand_score(actual, baseline))
-    return nmi,ari
 
 
 def drawcommunity(g,partition,filepath):#Function to draw nodes with different color for different community    
@@ -434,11 +431,6 @@ def conductance(graph: nx.Graph, community: object, summary: bool = True) -> obj
 
     Example:
 
-    >>> from cdlib.algorithms import louvain
-    >>> from cdlib import evaluation
-    >>> g = nx.karate_club_graph()
-    >>> communities = louvain(g)
-    >>> mod = evaluation.conductance(g,communities)
 
     :References:
 
@@ -535,11 +527,6 @@ def cut_ratio(graph: nx.Graph, community: object, summary: bool = True) -> objec
 
     Example:
 
-    >>> from cdlib.algorithms import louvain
-    >>> from cdlib import evaluation
-    >>> g = nx.karate_club_graph()
-    >>> communities = louvain(g)
-    >>> mod = evaluation.cut_ratio(g,communities)
 
     :References:
 
@@ -611,17 +598,6 @@ def purity(communities: object) :
 
     Example:
 
-    >>> from cdlib.algorithms import eva
-    >>> from cdlib import evaluation
-    >>> import random
-    >>> l1 = ['A', 'B', 'C', 'D']
-    >>> l2 = ["E", "F", "G"]
-    >>> g = nx.barabasi_albert_graph(100, 5)
-    >>> labels=dict()
-    >>> for node in g.nodes():
-    >>>    labels[node]={"l1":random.choice(l1), "l2":random.choice(l2)}
-    >>> communities = eva(g_attr, labels, alpha=0.5)
-    >>> pur = evaluation.purity(communities)
 
     :References:
 
@@ -634,26 +610,22 @@ def purity(communities: object) :
 
 
 ###All MAtrix calculation
-def calculateMatrix(G,comm_va,comm_list,i,filename):
+def calculateMatrix(G,comm_va,comm_list,i):
     #Matrix calculation
     print("For Timestamp ",i)
     print("No of communities are :")
     print(len(comm_va))
-    q=getQ(G,comm_va,G.number_of_nodes())
+    getQ(G,comm_va,G.number_of_nodes())
     Conductance_values=conductance(G,comm_va,True)
     print("Conductance value is ")
     print(Conductance_values['std'])
-    ed=external_density(G,comm_va)
-    nmi,ari=getscore(comm_va,comm_list)
-    cvr=coverage(G,comm_va)
+    external_density(G,comm_va)
+    getscore(comm_va,comm_list)
+    coverage(G,comm_va)
     Cut_ratio_value=cut_ratio(G,comm_va,True)
     print("Cut Ratio value is ")
     print(Cut_ratio_value['std'])
-    avi=AVI(G,comm_va)
-    data=[filename,"",len(comm_va),q,Conductance_values['std'],ed,nmi,ari,cvr,Cut_ratio_value['std'],avi]
-    sheet.append(data)
-    workbook.save("temp.xlsx")
-
+    AVI(G,comm_va)
 
 
 
@@ -664,42 +636,11 @@ edges_removed = set()
 nodes_added = set()
 nodes_removed = set()
 G=nx.Graph()
-
-
-#input declaration
-# edge_file='birthdeath.t01.edges'
+#edge_file='switch.t01.edges'
+edge_file='snapshot_0_edges.txt'
+#path='./LFR/muw=0.1/'
 path='./data/realworlddata1/highschool_2011/'
-# comm_file='birthdeath.t01.comm'
-# filename='birthdeath.t0'
-no_of_input=5
-
-edgeFile=[
-    "snapshot_0_edges.txt",
-    "snapshot_1_edges.txt",
-    "snapshot_3_edges.txt",
-    "snapshot_4_edges.txt",
-    "snapshot_6_edges.txt"
-
-]
-commFile=[
-    "snapshot0_comm_list.txt",
-"snapshot1_comm_list.txt",
-"snapshot3_comm_list.txt",
-"snapshot4_comm_list.txt",
-"snapshot6_comm_list.txt"
-]
-
-#Xcel sheet declaration
-# Create a new Excel workbook
-workbook = openpyxl.Workbook()
-
-# Select the default active sheet
-sheet = workbook.active
-data=["Name of the Data Set","Communities",	"No of Communities", "Modularity","Conductance","External Density","NMI","ARI","Coverage",	"Cut ratio",	"Average Isolability",	"Purity",	"NF1",	"TimeComplexity",	"Running Time"]
-sheet.append(data)
-
-with open(path+edgeFile[0],'r') as f:
-    
+with open(path+edge_file,'r') as f:
     edge_list=f.readlines()#storing data from file to list
     for edge in edge_list:
         edge=edge.split()
@@ -708,21 +649,23 @@ with open(path+edgeFile[0],'r') as f:
         G.add_edge(int(edge[0]),int(edge[1]))
 G=G.to_undirected()
 # Initial graph
+#print(edge_file)
 print('Network G0 for Time T0*********************************************')
-nx.draw_networkx(G)
-fpath='./data/pic/G_0.png'
-plt.savefig(fpath)           # Output method 1: Save the image as a png file
-plt.show()
-
-with open(path+commFile[0],'r') as f:
+# nx.draw_networkx(G)
+# fpath='./data/pic/G_0.png'
+# plt.savefig(fpath)           # Output method 1: Save the image as a png file
+# plt.show()
+#print G.edges()
+#comm_file='switch.t01.comm'
+comm_file='snapshot0_comm_list.txt'
+with open(path+comm_file,'r') as f:
     comm_list=f.readlines()
     comm_list=str_to_int(comm_list)
 comm={}#Used to store the detected community structure, format: {node: community_label}
-
 comm=CDID(G,0)   #Initial community
 # Draw communities
 print('Communities C0 for Time T0*********************************************')
-# drawcommunity(G,comm,'./data/pic/community_0.png')
+#drawcommunity(G,comm,'./data/pic/community_0.png')
 initcomm=conver_comm_to_lab(comm)
 print("initcomm is ")
 print(initcomm)
@@ -730,39 +673,45 @@ comm_va=list(initcomm.values())
 # print(comm_va)
 
 #Matrix calculation
-print("For the graph ",edgeFile[0])
-calculateMatrix(G,comm_va,comm_list,0,edgeFile[0])
+calculateMatrix(G,comm_va,comm_list,0)
 
 start=time.time()
 G1=nx.Graph()
 G2=nx.Graph()
 G1=G
 #filename='switch.t0'
-
-for i in range(1,no_of_input):
-    print('begin loop:', i)
-    comm_new_file=open(path+commFile[i],'r')
+with open(path + 'commlist.txt', 'r') as comm_list_file:
+    comm_filenames = comm_list_file.read().splitlines()
+    comm_filenames.pop(0)
+with open(path + 'edgeslist.txt', 'r') as edges_list_file:
+    edges_filenames = edges_list_file.read().splitlines()
+    edges_filenames.pop(0)
+for i in range(len(comm_filenames)):
+    comm_filename = comm_filenames[i]
+    edges_filename = edges_filenames[i]
+    print('begin loop:', i+1)
+    comm_new_file=open(path+comm_filename,'r')
     if i<10:#Reading the community file and checking if less than 10 or not
-        edge_list_new_file=open(path+edgeFile[i],'r')
+        edge_list_new_file=open(path+edges_filename,'r')
         edge_list_new=edge_list_new_file.readlines()
         comm_new=comm_new_file.readlines()
-    # elif i==10:
-    #     edge_list_new_file=open(path+filename+'_t0'+str(i)+'.txt','r')
-    #     edge_list_new=edge_list_new_file.readlines()
-    #     comm_new=comm_new_file.readlines()
-    # else:
-    #     edge_list_new_file=open(path+filename+'_'+str(i)+'_edges.txt','r')
-    #     edge_list_new=edge_list_new_file.readlines()
-    #     comm_new=comm_new_file.readlines()
+    elif i==10:
+        edge_list_new_file=open(path+'switch.t10.edges','r')
+        edge_list_new=edge_list_new_file.readlines()
+        comm_new=comm_new_file.readlines()
+    else:
+        edge_list_new_file=open(path+'switch.t'+str(i)+'.edges','r')
+        edge_list_new=edge_list_new_file.readlines()
+        comm_new=comm_new_file.readlines()
     comm_new=str_to_int(comm_new)
     for line in edge_list_new:
          temp = line.strip().split()     
          G2.add_edge(int(temp[0]),int(temp[1]))
-    print('Network G' + str(i ) + ' for Time T' + str(i - 1) +'*********************************************')
-    nx.draw_networkx(G2)
-    fpath='./data/pic/G_'+str(i-1)+'.png'
-    plt.savefig(fpath)           #Output method 1: Save the image as a png file
-    plt.show()
+    print('Network G' + str(i + 1) + ' for Time T' + str(i + 1) +'*********************************************')
+    # nx.draw_networkx(G2)
+    # fpath='./data/pic/G_'+str(i-1)+'.png'
+    # plt.savefig(fpath)           #Output method 1: Save the image as a png file
+    # plt.show()
     #The total number of nodes in the current time slice and the previous time slice are related to each other.
     total_nodes =set(G1.nodes())| set(G2.nodes())    
     
@@ -810,7 +759,7 @@ for i in range(1,no_of_input):
         comm=newcomm
     else:           
         getnewcomm=CDID(Gtemp,unchagecom_maxlabe)
-        # print('T'+str(i-1)+'Temporal networkdelta_g'+str(i-1)+'*********************************************')
+        print('T'+str(i+1)+'Temporal networkdelta_g'+str(i+1)+'*********************************************')
         # nx.draw_networkx(Gtemp)
         # fpath='./data/pic/delta_g'+str(i-1)+'.png'
         # plt.savefig(fpath)  
@@ -820,11 +769,10 @@ for i in range(1,no_of_input):
         d=dict(unchcommunity)        
         d.update(getnewcomm)        
         comm=dict(d) #Using the currently obtained community structure as the input for the next iteration
-        print('T'+str(i-1)+'Community Structure of the Time Slice.'+str(i-1)+'*********************************************')
-        # drawcommunity(G2,comm,'./data/pic/community_'+str(i-1)+'.png')
+        print('T'+str(i+1)+'Community Structure of the Time Slice.'+str(i+1)+'*********************************************')
+        #drawcommunity(G2,comm,'./data/pic/community_'+str(i-1)+'.png')
     comm_va=list(conver_comm_to_lab(comm).values())
-    print("For the graph ",edgeFile[i])
-    calculateMatrix(G2,comm_va,comm_new,i,edgeFile[i])
+    calculateMatrix(G2,comm_va,comm_new,i-1)
     
     G1.clear()
     G1.add_edges_from(G2.edges())
